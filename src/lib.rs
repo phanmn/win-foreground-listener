@@ -112,16 +112,24 @@ fn listen(rt: &Runtime, pid: u32, js_callback: JsCallback) -> JoinHandle<()> {
 
         while let Some(event) = event_rx.recv().await {
             if event.object_type() == AccessibleObjectId::Window {
-                let title = get_window_text(
-                    event
+                let hwnd = format!(
+                    "{}",
+                    (event
                         .window_handle()
-                        .map_or_else(ptr::null_mut, NonNull::as_ptr),
-                )
-                .unwrap();
-                let result = match title {
-                    Some(v) => js_callback.call(v).await,
-                    None => js_callback.call(String::new()).await,
-                };
+                        .map_or_else(ptr::null_mut, NonNull::as_ptr)) as isize
+                );
+
+                let result = js_callback.call(hwnd).await;
+                // let title = get_window_text(
+                //     event
+                //         .window_handle()
+                //         .map_or_else(ptr::null_mut, NonNull::as_ptr),
+                // )
+                // .unwrap();
+                // let result = match title {
+                //     Some(v) => js_callback.call(v).await,
+                //     None => js_callback.call(String::new()).await,
+                // };
 
                 match result {
                     Err(err) => println!("Failed to call JavaScript: {:?}", err),
@@ -136,33 +144,33 @@ fn listen(rt: &Runtime, pid: u32, js_callback: JsCallback) -> JoinHandle<()> {
     });
 }
 
-fn get_window_text_length(window: HWND) -> io::Result<Option<NonZeroUsize>> {
-    unsafe { SetLastError(0) };
-    let result = unsafe { GetWindowTextLengthW(window) };
-    if result == 0 && unsafe { GetLastError() } != 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(NonZeroUsize::new(result as usize))
-    }
-}
+// fn get_window_text_length(window: HWND) -> io::Result<Option<NonZeroUsize>> {
+//     unsafe { SetLastError(0) };
+//     let result = unsafe { GetWindowTextLengthW(window) };
+//     if result == 0 && unsafe { GetLastError() } != 0 {
+//         Err(io::Error::last_os_error())
+//     } else {
+//         Ok(NonZeroUsize::new(result as usize))
+//     }
+// }
 
-fn get_window_text(window: HWND) -> io::Result<Option<String>> {
-    let text_len = if let Some(length) = get_window_text_length(window)? {
-        length.get()
-    } else {
-        return Ok(None);
-    };
+// fn get_window_text(window: HWND) -> io::Result<Option<String>> {
+//     let text_len = if let Some(length) = get_window_text_length(window)? {
+//         length.get()
+//     } else {
+//         return Ok(None);
+//     };
 
-    let mut text = Vec::with_capacity(text_len + 1); // +1 for null terminator
-    let result = unsafe { GetWindowTextW(window, text.as_mut_ptr(), text.capacity() as i32) };
-    if result != 0 {
-        unsafe { text.set_len(text_len) };
-        let text = String::from_utf16_lossy(&text);
-        Ok(Some(text))
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
+//     let mut text = Vec::with_capacity(text_len + 1); // +1 for null terminator
+//     let result = unsafe { GetWindowTextW(window, text.as_mut_ptr(), text.capacity() as i32) };
+//     if result != 0 {
+//         unsafe { text.set_len(text_len) };
+//         let text = String::from_utf16_lossy(&text);
+//         Ok(Some(text))
+//     } else {
+//         Err(io::Error::last_os_error())
+//     }
+// }
 
 // https://github.com/neon-bindings/neon/issues/848
 // https://github.dev/owenthereal/neon-tonic-example/blob/master/src/lib.rs
@@ -172,7 +180,10 @@ pub struct JsCallback {
 }
 
 impl JsCallback {
-    pub async fn call(&self, name: String) -> Result<String, tokio::sync::oneshot::error::RecvError> {
+    pub async fn call(
+        &self,
+        name: String,
+    ) -> Result<String, tokio::sync::oneshot::error::RecvError> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let callback = self.callback.clone();
         let _ = self.channel.try_send(move |mut cx| {

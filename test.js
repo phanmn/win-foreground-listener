@@ -2,6 +2,6 @@ const WindowForegroundListener = require("./index");
 
 const windowForegroundListener = new WindowForegroundListener();
 
-windowForegroundListener.start(27108, (name) => {
+windowForegroundListener.start(0, (name) => {
   console.log(name);
 });
